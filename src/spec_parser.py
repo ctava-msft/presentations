@@ -112,6 +112,7 @@ def _parse_slide_style(text: str) -> dict:
         "BadgeGradientStart", "BadgeGradientEnd", "BadgeTextColor",
         "BadgeWidth", "BadgeHeight", "BadgeFontSize", "BadgeCornerRadius",
         "BoxBorderColor", "BoxBackground", "BoxCornerRadius",
+        "OuterBorderColor",
         "UrlColor", "NameFontSize", "UrlFontSize",
         "NameColor", "DividerColor",
     ]

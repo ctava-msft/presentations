@@ -294,6 +294,7 @@ def add_resource_box_slide(
     box_corner = int(ss.get("BoxCornerRadius", style.box_corner_radius))
 
     box_top = Inches(2.3)
+    outer_border_color_hex = ss.get("OuterBorderColor")
     for box_data in slide_data.get("boxes", []):
         label = box_data["label"]
         rows = box_data["rows"]
@@ -303,6 +304,35 @@ def add_resource_box_slide(
         container_width = slide_w - Inches(2.0)
         num_rows = max(len(rows), 1)
         container_height = Inches(0.5 * num_rows + 0.35)
+
+        # Optional outer border rectangle (drawn first so it sits behind)
+        if outer_border_color_hex:
+            outer_margin = Inches(0.12)
+            badge_left_pos = Inches(0.3)
+            outer_left = badge_left_pos - outer_margin
+            outer_top = box_top - outer_margin
+            outer_width = (container_left + container_width) - badge_left_pos + 2 * outer_margin
+            outer_height = container_height + 2 * outer_margin
+            outer = slide.shapes.add_shape(
+                MSO_SHAPE.ROUNDED_RECTANGLE,
+                outer_left, outer_top, outer_width, outer_height,
+            )
+            outer.fill.background()  # transparent fill
+            outer.line.color.rgb = _hex_to_rgb(outer_border_color_hex)
+            outer.line.width = Pt(1.5)
+            # Match corner rounding to container
+            outer_sp = outer._element
+            osp_pr = outer_sp.find(qn("p:spPr"))
+            opr_elem = osp_pr.find(qn("a:prstGeom")) if osp_pr is not None else None
+            if opr_elem is not None:
+                oavLst = opr_elem.find(qn("a:avLst"))
+                if oavLst is None:
+                    oavLst = copy.deepcopy(opr_elem.makeelement(qn("a:avLst"), {}))
+                    opr_elem.append(oavLst)
+                oavLst.clear()
+                ogd = oavLst.makeelement(qn("a:gd"), {"name": "adj", "fmla": f"val {box_corner}"})
+                oavLst.append(ogd)
+
         container = slide.shapes.add_shape(
             MSO_SHAPE.ROUNDED_RECTANGLE,
             container_left, box_top, container_width, container_height,
