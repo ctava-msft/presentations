@@ -52,6 +52,15 @@ def main(argv: list[str] | None = None) -> None:
             "even if cached results exist in the spec file."
         ),
     )
+    parser.add_argument(
+        "--slides",
+        default=None,
+        help=(
+            "Slide numbers to generate (1-indexed). "
+            "Examples: '5' (one slide), '3-7' (range), '1,3,5-8' (mixed). "
+            "Default: all slides."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if not os.path.isfile(args.spec):
@@ -64,4 +73,5 @@ def main(argv: list[str] | None = None) -> None:
         image_model=args.image_model,
         refetch=args.refetch,
         spec_path=args.spec,
+        slide_selection=args.slides,
     )

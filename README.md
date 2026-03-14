@@ -1,6 +1,20 @@
 # Presentation Generator
 
-Reads a `.spec.md` file and produces a PowerPoint deck with animations, images, AI-generated visuals, and AI-enriched speaker notes.  All AI operations use the **Azure AI Inference SDK** with `DefaultAzureCredential`.
+Reads a `.spec.md` file and produces a PowerPoint deck with animations, images, AI-generated visuals, and AI-enriched speaker notes.  
+
+## Problem Statement
+
+Building presentations is one of the most time-consuming tasks in technical communication. Teams spend hours manually crafting slides, sourcing visuals, writing speaker notes, and ensuring consistent formatting — work that is repetitive, error-prone, and disconnected from the source content. Existing tools offer either full manual control (PowerPoint) or rigid templates with little flexibility.
+
+Key pain points this project addresses:
+
+- **Slow iteration cycles** — updating a deck means re-editing dozens of slides by hand, making it hard to keep presentations in sync with fast-moving content.
+- **Inconsistent quality** — without a repeatable process, slide design, animations, and speaker notes vary across authors and revisions.
+- **No content-as-code workflow** — presentations are opaque binary files that don't fit into version control, code review, or CI/CD pipelines.
+- **Manual image creation** — sourcing or designing visuals for every slide is a bottleneck, especially for technical topics where good diagrams are scarce.
+- **Shallow speaker notes** — authors rarely have time to research and write thorough notes, leaving presenters underprepared.
+
+This tool solves these problems by treating presentations as **code**: a simple Markdown spec file drives the entire build, AI generates visuals and enriches notes from reference URLs, and every run produces a versioned `.pptx` — reproducible, diffable, and fully automated.
 
 ## Quick Start
 
@@ -151,19 +165,6 @@ Font sizes are configurable in the front-matter `style:` block:
 | `column_heading_font_size` | 22 | Two-column headings |
 | `column_body_font_size` | 18 | Two-column body |
 
-## CLI Reference
-
-```
-python presentation.py <spec-file> [options]
-
-positional arguments:
-  spec                  Path to the .spec.md file
-
-options:
-  -o, --output-dir DIR  Output directory (default: output)
-  --image-model MODEL   Image generation model name (overrides front-matter)
-```
-
 ## Azure Infrastructure
 
 The `infra/` directory contains Bicep templates for deploying Azure AI Foundry resources using the Azure Developer CLI (`azd`).
@@ -220,3 +221,18 @@ Authentication is handled by `DefaultAzureCredential` — run `az login` locally
 - See [requirements.txt](requirements.txt)
 - For Azure deployment: [Azure Developer CLI](https://learn.microsoft.com/azure/developer/azure-developer-cli/)
 - For AI features: `az login` (or set `AZURE_AI_PROJECT_ENDPOINT` + managed identity)
+
+## CLI Reference
+
+```
+python presentation.py <spec-file> [options]
+
+positional arguments:
+  spec                  Path to the .spec.md file
+
+options:
+  -o, --output-dir DIR  Output directory (default: output)
+  --image-model MODEL   Image generation model name (overrides front-matter)
+  --slides SELECTION    Slide numbers to generate (1-indexed). Default: all.
+                        Examples: '5', '3-7', '1,3,5-8'
+```

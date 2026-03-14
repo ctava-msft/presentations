@@ -75,6 +75,12 @@ def _parse_slide(raw: str) -> dict | None:
     elif slide_type == "two-column":
         slide.update(_parse_two_column(rest))
 
+    elif slide_type == "resource-box":
+        sub_match = re.search(r"\*\*Subtitle\*\*\s*:\s*(.+)", rest)
+        slide["subtitle"] = sub_match.group(1).strip() if sub_match else ""
+        slide["boxes"] = _parse_resource_boxes(rest)
+        slide["slide_style"] = _parse_slide_style(rest)
+
     return slide
 
 
@@ -95,6 +101,43 @@ def _parse_two_column(text: str) -> dict:
     )
     result["right_bullets"] = _extract_bullets(right_match.group(1)) if right_match else []
     return result
+
+
+def _parse_slide_style(text: str) -> dict:
+    """Parse inline ``**Key**: value`` style directives for resource-box slides."""
+    style: dict = {}
+    _STYLE_KEYS = [
+        "SlideBackground", "TitleColor", "TitleSize",
+        "SubtitleSize", "SubtitleColors",
+        "BadgeGradientStart", "BadgeGradientEnd", "BadgeTextColor",
+        "BadgeWidth", "BadgeHeight", "BadgeFontSize", "BadgeCornerRadius",
+        "BoxBorderColor", "BoxBackground", "BoxCornerRadius",
+        "UrlColor", "NameFontSize", "UrlFontSize",
+        "NameColor", "DividerColor",
+    ]
+    for key in _STYLE_KEYS:
+        m = re.search(rf"\*\*{key}\*\*\s*:\s*(.+)", text)
+        if m:
+            style[key] = m.group(1).strip()
+    return style
+
+
+def _parse_resource_boxes(text: str) -> list[dict]:
+    """Parse ``**Box**: label`` sections followed by ``- name | url`` rows."""
+    boxes = []
+    for m in re.finditer(
+        r"\*\*Box\*\*\s*:\s*(.+?)\n((?:\s*-\s+.+\n?)*)",
+        text,
+    ):
+        label = m.group(1).strip()
+        rows = []
+        for row_m in re.finditer(r"^\s*-\s+(.+)", m.group(2), re.MULTILINE):
+            parts = [p.strip() for p in row_m.group(1).split("|", 1)]
+            name = parts[0]
+            url = parts[1] if len(parts) > 1 else ""
+            rows.append({"name": name, "url": url})
+        boxes.append({"label": label, "rows": rows})
+    return boxes
 
 
 def _parse_image_field(text: str) -> dict | None:

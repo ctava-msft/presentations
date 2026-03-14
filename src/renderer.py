@@ -34,17 +34,50 @@ def _next_version_path(output_dir: str, filename: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _parse_slide_selection(selection: str, total: int) -> list[int]:
+    """Parse a slide selection string into a sorted list of 0-based indices.
+
+    *selection* uses 1-based slide numbers.  Supports single numbers (``5``),
+    ranges (``3-7``), and comma-separated combinations (``1,3,5-8``).
+    Out-of-range values are silently clamped.
+    """
+    indices: set[int] = set()
+    for part in selection.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            lo_s, hi_s = part.split("-", 1)
+            lo = max(1, int(lo_s.strip()))
+            hi = min(total, int(hi_s.strip()))
+            indices.update(range(lo - 1, hi))  # convert to 0-based
+        else:
+            n = int(part)
+            if 1 <= n <= total:
+                indices.add(n - 1)
+    return sorted(indices)
+
+
 def render(
     spec: dict,
     output_dir: str = "output",
     image_model: str | None = None,
     refetch: bool = False,
     spec_path: str | None = None,
+    slide_selection: str | None = None,
 ) -> str:
     """Render a parsed spec into a PowerPoint file and return the output path."""
     metadata = spec["metadata"]
     slides = spec["slides"]
     out_name = metadata.get("output", "presentation.pptx")
+
+    # Filter slides if a selection was provided
+    if slide_selection:
+        selected = _parse_slide_selection(slide_selection, len(slides))
+        if not selected:
+            raise SystemExit(f"Error: no valid slides in selection '{slide_selection}' (deck has {len(slides)} slides)")
+        slides = [slides[i] for i in selected]
+        print(f"Generating {len(slides)} of {len(spec['slides'])} slides (selection: {slide_selection})")
 
     # Image model priority: CLI flag > front-matter
     default_model = (

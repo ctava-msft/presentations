@@ -9,7 +9,9 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from pptx.util import Inches
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN
+from pptx.util import Inches, Pt
 
 if TYPE_CHECKING:
     from pptx import Presentation
@@ -176,6 +178,255 @@ def add_two_column_slide(
         apply_animations(slide, slide_data["animations"])
 
 
+def _hex_to_rgb(hex_str: str) -> RGBColor:
+    """Convert '#RRGGBB' to an RGBColor."""
+    h = hex_str.lstrip("#")
+    return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def _interpolate_colors(colors: list[str], count: int) -> list[RGBColor]:
+    """Distribute *colors* evenly across *count* slots via linear interpolation."""
+    if count <= 0:
+        return []
+    if count == 1:
+        return [_hex_to_rgb(colors[0])]
+    result: list[RGBColor] = []
+    for i in range(count):
+        t = i / (count - 1)  # 0.0 → 1.0
+        seg = t * (len(colors) - 1)
+        lo = int(seg)
+        hi = min(lo + 1, len(colors) - 1)
+        frac = seg - lo
+        c0 = _hex_to_rgb(colors[lo])
+        c1 = _hex_to_rgb(colors[hi])
+        r = int(c0[0] + (c1[0] - c0[0]) * frac)
+        g = int(c0[1] + (c1[1] - c0[1]) * frac)
+        b = int(c0[2] + (c1[2] - c0[2]) * frac)
+        result.append(RGBColor(r, g, b))
+    return result
+
+
+def add_resource_box_slide(
+    prs: Presentation,
+    slide_data: dict,
+    style: Style,
+    *,
+    apply_animations=None,
+) -> None:
+    """Custom layout – centred heading, coloured subtitle, labelled resource boxes."""
+    from pptx.util import Emu
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.oxml.ns import qn
+    import copy
+
+    ss = slide_data.get("slide_style", {})
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank layout
+    slide_w = prs.slide_width
+
+    # --- Slide background ---
+    bg_hex = ss.get("SlideBackground", style.slide_background)
+    if bg_hex:
+        bg = slide.background
+        fill = bg.fill
+        fill.solid()
+        fill.fore_color.rgb = _hex_to_rgb(bg_hex)
+
+    # --- Title (h1) centred near top ---
+    title_size = Pt(int(ss.get("TitleSize", "36")))
+    title_color = _hex_to_rgb(ss["TitleColor"]) if ss.get("TitleColor") else RGBColor(0, 0, 0)
+
+    title_left, title_top = Inches(0.5), Inches(0.4)
+    title_width, title_height = slide_w - Inches(1.0), Inches(0.9)
+    title_box = slide.shapes.add_textbox(title_left, title_top, title_width, title_height)
+    tf = title_box.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    p.text = slide_data["title"]
+    p.font.size = title_size
+    p.font.bold = True
+    p.font.color.rgb = title_color
+    p.alignment = PP_ALIGN.CENTER
+
+    # --- Subtitle (h2) with per-character gradient colouring ---
+    subtitle = slide_data.get("subtitle", "")
+    if subtitle:
+        sub_size = Pt(int(ss.get("SubtitleSize", "24")))
+        sub_left, sub_top = Inches(0.5), Inches(1.3)
+        sub_width, sub_height = slide_w - Inches(1.0), Inches(0.6)
+        sub_box = slide.shapes.add_textbox(sub_left, sub_top, sub_width, sub_height)
+        stf = sub_box.text_frame
+        stf.word_wrap = True
+        sp = stf.paragraphs[0]
+        sp.alignment = PP_ALIGN.CENTER
+
+        gradient_raw = ss.get("SubtitleColors", "") or style.subtitle_colors
+        if gradient_raw:
+            color_stops = [c.strip() for c in gradient_raw.split(",")]
+            char_colors = _interpolate_colors(color_stops, len(subtitle))
+            sp.clear()
+            for idx, ch in enumerate(subtitle):
+                run = sp.add_run()
+                run.text = ch
+                run.font.size = sub_size
+                run.font.color.rgb = char_colors[idx]
+        else:
+            sp.text = subtitle
+            sp.font.size = sub_size
+            sp.font.color.rgb = RGBColor(0x00, 0x78, 0xD4)
+
+    # --- Resource boxes ---
+    # Resolve from slide-level overrides (ss) falling back to global style
+    badge_grad_start = ss.get("BadgeGradientStart", style.badge_gradient_start)
+    badge_grad_end = ss.get("BadgeGradientEnd", style.badge_gradient_end)
+    badge_text_color = _hex_to_rgb(ss.get("BadgeTextColor", style.badge_text_color))
+    box_border_color = _hex_to_rgb(ss.get("BoxBorderColor", style.box_border_color))
+    box_bg_hex = ss.get("BoxBackground", style.box_background)
+    url_color = _hex_to_rgb(ss.get("UrlColor", style.url_color))
+    name_color = _hex_to_rgb(ss.get("NameColor", style.name_color))
+    divider_color = _hex_to_rgb(ss.get("DividerColor", style.divider_color))
+    name_font_size = Pt(int(ss.get("NameFontSize", style.name_font_size)))
+    url_font_size = Pt(int(ss.get("UrlFontSize", style.url_font_size)))
+    badge_w = float(ss.get("BadgeWidth", style.badge_width))
+    badge_h = float(ss.get("BadgeHeight", style.badge_height))
+    badge_font_sz = int(ss.get("BadgeFontSize", style.badge_font_size))
+    badge_corner = int(ss.get("BadgeCornerRadius", style.badge_corner_radius))
+    box_corner = int(ss.get("BoxCornerRadius", style.box_corner_radius))
+
+    box_top = Inches(2.3)
+    for box_data in slide_data.get("boxes", []):
+        label = box_data["label"]
+        rows = box_data["rows"]
+
+        # Container rounded rectangle (border + background)
+        container_left = Inches(1.6)
+        container_width = slide_w - Inches(2.0)
+        num_rows = max(len(rows), 1)
+        container_height = Inches(0.5 * num_rows + 0.35)
+        container = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE,
+            container_left, box_top, container_width, container_height,
+        )
+        container.fill.solid()
+        container.fill.fore_color.rgb = _hex_to_rgb(box_bg_hex)
+        container.line.color.rgb = box_border_color
+        container.line.width = Pt(1.5)
+        # Reduce corner rounding
+        container_sp = container._element
+        sp_pr_c = container_sp.find(qn("p:spPr"))
+        pr_elem = sp_pr_c.find(qn("a:prstGeom")) if sp_pr_c is not None else None
+        if pr_elem is not None:
+            avLst = pr_elem.find(qn("a:avLst"))
+            if avLst is None:
+                avLst = copy.deepcopy(pr_elem.makeelement(qn("a:avLst"), {}))
+                pr_elem.append(avLst)
+            avLst.clear()
+            gd = avLst.makeelement(qn("a:gd"), {"name": "adj", "fmla": f"val {box_corner}"})
+            avLst.append(gd)
+
+        # Horizontal divider line inside container
+        div_y = box_top + Inches(0.38)
+        div_line = slide.shapes.add_connector(
+            1, container_left + Inches(0.15), div_y,
+            container_left + container_width - Inches(0.15), div_y,
+        )
+        div_line.line.color.rgb = divider_color
+        div_line.line.width = Pt(0.75)
+
+        # Resource text rows inside the container
+        for i, row in enumerate(rows):
+            row_y = box_top + Inches(0.08 + 0.5 * i)
+            # Name text
+            name_box = slide.shapes.add_textbox(
+                container_left + Inches(0.2), row_y,
+                Inches(2.5), Inches(0.35),
+            )
+            ntf = name_box.text_frame
+            ntf.word_wrap = True
+            np_ = ntf.paragraphs[0]
+            np_.text = row["name"]
+            np_.font.size = name_font_size
+            np_.font.color.rgb = name_color
+
+            # URL text (right-aligned)
+            url_box = slide.shapes.add_textbox(
+                container_left + container_width - Inches(4.7), row_y,
+                Inches(4.5), Inches(0.35),
+            )
+            utf = url_box.text_frame
+            utf.word_wrap = True
+            up = utf.paragraphs[0]
+            up.text = row["url"]
+            up.font.size = url_font_size
+            up.font.color.rgb = url_color
+            up.alignment = PP_ALIGN.RIGHT
+
+        # Badge / label shape (rounded rectangle with gradient)
+        badge_left = Inches(0.3)
+        badge_width, badge_height = Inches(badge_w), Inches(badge_h)
+        badge_y = box_top + Inches((container_height / Inches(1) - badge_h) / 2)
+        badge = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE,
+            badge_left, badge_y, badge_width, badge_height,
+        )
+        # Gradient fill from start to end via XML
+        # First clear any style-based fill by setting solid, then replacing with gradient
+        badge.fill.solid()
+        sp_pr = badge._element.find(qn("p:spPr"))
+        # Remove the solidFill we just added
+        for old_fill in list(sp_pr.findall(qn("a:solidFill"))):
+            sp_pr.remove(old_fill)
+        grad_fill = sp_pr.makeelement(qn("a:gradFill"), {})
+        gs_lst = grad_fill.makeelement(qn("a:gsLst"), {})
+        # Stop 1 – start color
+        gs1 = gs_lst.makeelement(qn("a:gs"), {"pos": "0"})
+        srgb1 = gs1.makeelement(qn("a:srgbClr"), {"val": badge_grad_start.lstrip("#")})
+        gs1.append(srgb1)
+        gs_lst.append(gs1)
+        # Stop 2 – end color
+        gs2 = gs_lst.makeelement(qn("a:gs"), {"pos": "100000"})
+        srgb2 = gs2.makeelement(qn("a:srgbClr"), {"val": badge_grad_end.lstrip("#")})
+        gs2.append(srgb2)
+        gs_lst.append(gs2)
+        grad_fill.append(gs_lst)
+        # Linear gradient direction (top-to-bottom)
+        lin = grad_fill.makeelement(qn("a:lin"), {"ang": "5400000", "scaled": "1"})
+        grad_fill.append(lin)
+        sp_pr.append(grad_fill)
+
+        badge.line.fill.background()  # no border
+        # Badge corner rounding
+        badge_sp = badge._element
+        badge_sp_pr = badge_sp.find(qn('p:spPr'))
+        bpr = badge_sp_pr.find(qn('a:prstGeom')) if badge_sp_pr is not None else None
+        if bpr is not None:
+            bavLst = bpr.find(qn("a:avLst"))
+            if bavLst is None:
+                bavLst = copy.deepcopy(bpr.makeelement(qn("a:avLst"), {}))
+                bpr.append(bavLst)
+            bavLst.clear()
+            bgd = bavLst.makeelement(qn("a:gd"), {"name": "adj", "fmla": f"val {badge_corner}"})
+            bavLst.append(bgd)
+
+        btf = badge.text_frame
+        btf.word_wrap = True
+        from pptx.enum.text import MSO_ANCHOR
+        btf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        btf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        bp = btf.paragraphs[0]
+        bp.text = label
+        bp.font.size = Pt(badge_font_sz)
+        bp.font.color.rgb = badge_text_color
+        bp.font.bold = True
+        bp.alignment = PP_ALIGN.CENTER
+
+        box_top += container_height + Inches(0.4)
+
+    slide.notes_slide.notes_text_frame.text = slide_data.get("notes", "")
+    if apply_animations and slide_data.get("animations"):
+        apply_animations(slide, slide_data["animations"])
+
+
 # ---------------------------------------------------------------------------
 # Registry mapping slide type names → builder functions
 # ---------------------------------------------------------------------------
@@ -185,4 +436,5 @@ SLIDE_BUILDERS: dict[str, callable] = {
     "content": add_content_slide,
     "section-header": add_section_header_slide,
     "two-column": add_two_column_slide,
+    "resource-box": add_resource_box_slide,
 }
