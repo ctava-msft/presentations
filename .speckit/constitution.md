@@ -1,4 +1,4 @@
-# Microsoft Presentation Constitution
+# Presentation Constitution
 
 ## Project Overview
 
@@ -10,7 +10,7 @@ This constitution establishes the principles, standards, and governance framewor
 
 ### 1. Specification-Driven Content
 
-- **Content as Code**: All presentation content lives in versioned `.spec.md` files, never hardcoded in scripts
+- **Content as a Spec**: All presentation content lives in versioned `.spec.md` files, never hardcoded in scripts
 - **Separation of Concerns**: Content (spec) is decoupled from rendering (script) and styling (theme)
 - **Single Source of Truth**: Each presentation topic has exactly one spec file that defines all slides, notes, and metadata
 - **Reproducibility**: Running the same spec always produces the same presentation
@@ -22,7 +22,7 @@ This constitution establishes the principles, standards, and governance framewor
 - **Actionable Takeaways**: Every presentation must end with clear, actionable next steps
 - **Speaker Notes**: Every slide must include speaker notes that guide delivery and provide context beyond bullet points
 
-### 3. Microsoft Brand & Messaging Standards
+### 3. Brand & Messaging Standards
 
 - **Consistent Voice**: Professional, clear, confident—never hyperbolic or speculative
 - **Balanced Perspective**: Present capabilities alongside limitations and risks
