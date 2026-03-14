@@ -43,10 +43,25 @@ def main(argv: list[str] | None = None) -> None:
             "Overrides the front-matter 'image_model' setting."
         ),
     )
+    parser.add_argument(
+        "--refetch",
+        action="store_true",
+        default=False,
+        help=(
+            "Re-fetch and regenerate all AI enrichments, "
+            "even if cached results exist in the spec file."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if not os.path.isfile(args.spec):
         sys.exit(f"Error: spec file not found: {args.spec}")
 
     spec = parse_spec(args.spec)
-    render(spec, args.output_dir, image_model=args.image_model)
+    render(
+        spec,
+        args.output_dir,
+        image_model=args.image_model,
+        refetch=args.refetch,
+        spec_path=args.spec,
+    )

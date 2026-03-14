@@ -59,6 +59,7 @@ def _parse_slide(raw: str) -> dict | None:
     slide["image_prompt"] = _parse_image_prompt_field(rest)
     slide["animations"] = _parse_animations(rest)
     slide["positions"] = _parse_positions(rest)
+    slide["enriched"] = bool(re.search(r"\*\*Enriched\*\*\s*:\s*true", rest, re.IGNORECASE))
 
     if slide_type == "title":
         sub_match = re.search(r"\*\*Subtitle\*\*\s*:\s*(.+)", rest)

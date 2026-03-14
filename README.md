@@ -15,6 +15,10 @@ pip install -r requirements.txt
 python presentations.py .speckit/specifications/ai101.spec.md
 ```
 
+```copilot
+activate .venv and execute presentations.py
+```
+
 ## Project Structure
 
 ```

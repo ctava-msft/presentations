@@ -10,6 +10,7 @@ from .animations import apply_animations
 from .enrichment import enrich_content_from_urls, enrich_notes_from_urls
 from .images import resolve_image_prompt
 from .slides import SLIDE_BUILDERS
+from .spec_writer import write_spec
 from .style import Style
 
 # ---------------------------------------------------------------------------
@@ -37,6 +38,8 @@ def render(
     spec: dict,
     output_dir: str = "output",
     image_model: str | None = None,
+    refetch: bool = False,
+    spec_path: str | None = None,
 ) -> str:
     """Render a parsed spec into a PowerPoint file and return the output path."""
     metadata = spec["metadata"]
@@ -62,6 +65,8 @@ def render(
 
     prs = Presentation()
 
+    any_enriched = False
+
     for slide_data in slides:
         stype = slide_data["type"]
         builder = SLIDE_BUILDERS.get(stype)
@@ -69,16 +74,39 @@ def render(
             print(f"Warning: unknown slide type '{stype}', skipping.")
             continue
 
-        # Enrich slide content from ContentUrls before building
-        enrich_content_from_urls(slide_data, text_model=text_model)
+        # Skip enrichment if already cached (unless --refetch)
+        already_enriched = slide_data.get("enriched", False)
+        if already_enriched and not refetch:
+            pass  # use cached content
+        else:
+            # Enrich slide content from ContentUrls before building
+            old_bullets = list(slide_data.get("bullets", []))
+            old_left = list(slide_data.get("left_bullets", []))
+            old_right = list(slide_data.get("right_bullets", []))
+            old_notes = slide_data.get("notes", "")
 
-        # Enrich notes from ContentUrls before building
-        enrich_notes_from_urls(slide_data, text_model=text_model)
+            enrich_content_from_urls(slide_data, text_model=text_model)
+            enrich_notes_from_urls(slide_data, text_model=text_model)
+
+            # Detect if enrichment actually changed anything
+            new_bullets = slide_data.get("bullets", [])
+            new_left = slide_data.get("left_bullets", [])
+            new_right = slide_data.get("right_bullets", [])
+            new_notes = slide_data.get("notes", "")
+            if (new_bullets != old_bullets or new_left != old_left
+                    or new_right != old_right or new_notes != old_notes):
+                slide_data["enriched"] = True
+                any_enriched = True
 
         # Resolve any ImagePrompt → generate images before building
         resolve_image_prompt(slide_data, output_dir, default_model=default_model)
 
         builder(prs, slide_data, style, apply_animations=apply_animations)
+
+    # Write enriched spec back to disk so next run uses cached data
+    if any_enriched and spec_path:
+        write_spec(spec, spec_path)
+        print(f"Saved enriched spec -> {spec_path}")
 
     os.makedirs(output_dir, exist_ok=True)
     out_path = _next_version_path(output_dir, out_name)
