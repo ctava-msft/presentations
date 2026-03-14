@@ -100,8 +100,63 @@ audience: business, IT
 - Right bullet one
 - Right bullet two
 
+**Image**: images/diagram.png, 6.5, 1.5, 3.0, 3.0
+
+**Animation**: title > fade
+**Animation**: content > appear
+
 **Notes**: Speaker notes for delivery guidance.
 ```
+
+### Images
+
+Any slide can include an optional `**Image**:` field to place a picture on the slide:
+
+```
+**Image**: path/to/image.png
+**Image**: path/to/image.png, left, top
+**Image**: path/to/image.png, left, top, width, height
+```
+
+- **path** (required): Relative or absolute path to the image file
+- **left, top** (optional): Position in inches (default: 6.5, 1.5)
+- **width, height** (optional): Size in inches (default: 3.0, 3.0)
+
+### Animations
+
+Any slide can include one or more `**Animation**:` fields to add entrance animations:
+
+```
+**Animation**: target > effect
+```
+
+**Targets** (plain English):
+
+| Target | What it animates |
+|--------|------------------|
+| `title` | The slide title |
+| `content` or `bullets` | The main content / bullet placeholder |
+| `subtitle` | The subtitle placeholder |
+| `left` | Left column (two-column slides) |
+| `right` | Right column (two-column slides) |
+| `image` | An inserted picture |
+| `all` | Every shape on the slide |
+
+**Effects** (plain English):
+
+| Effect | Description |
+|--------|-------------|
+| `appear` | Instantly appears on click |
+| `fade` | Fades in smoothly |
+| `fly-in` | Flies in from the bottom |
+| `fly-in-left` | Flies in from the left |
+| `fly-in-right` | Flies in from the right |
+| `fly-in-top` | Flies in from the top |
+| `wipe` | Wipes in from one edge |
+| `zoom` | Zooms in from center |
+| `float-in` | Floats in gently from below |
+| `split` | Splits open from center |
+| `blinds` | Venetian blinds effect |
 
 ### YAML Front Matter
 
@@ -123,6 +178,7 @@ Each slide is separated by `---` and begins with `## [type] Title`:
 - **Section Header slides** (`[section-header]`): Include an optional `**Subtitle**:` line for topic transitions
 - **Two-column slides** (`[two-column]`): Include `**Left**:` (bullets) and `**Right**:` (bullets)
 - **All slides**: Must include a `**Notes**:` section
+- **All slides**: May optionally include `**Image**:` and one or more `**Animation**:` lines
 
 ## Development Standards
 
