@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This constitution establishes the principles, standards, and governance framework for creating professional presentations using specification-driven automation. Presentations are generated from structured markdown specification files, ensuring consistency, reusability, and quality across all Microsoft presentation deliverables.
+This constitution establishes the principles, standards, and governance framework for creating professional presentations using specification-driven automation. Presentations are generated from structured markdown specification files, ensuring consistency, reusability, and quality across all presentation deliverables.
 
 **Mission**: Enable scalable, high-quality presentation creation where content is authored as structured specifications and rendered into polished slide decks via automation—eliminating manual formatting and ensuring brand/message consistency.
 
@@ -33,11 +33,12 @@ This constitution establishes the principles, standards, and governance framewor
 
 All presentations use a defined set of slide types to maintain consistency:
 
-| Slide Type | Purpose | Required Fields |
-|------------|---------|-----------------|
-| `title` | Opening slide with title and subtitle | title, subtitle, notes |
-| `bullets` | Key points with supporting notes | title, bullets (list), notes |
-| `two-column` | Side-by-side comparison or contrast | title, left_title, left_bullets, right_title, right_bullets, notes |
+| Slide Type | Layout | Purpose | Required Fields |
+|------------|--------|---------|------------------|
+| `title` | 0 – Title Slide | Opening slide with title and subtitle | title, subtitle, notes |
+| `content` | 1 – Title and Content | Key points with supporting notes | title, bullets (list), notes |
+| `section-header` | 2 – Section Header | Topic transition with title and subtitle | title, subtitle, notes |
+| `two-column` | 3 – Two Content | Side-by-side comparison or contrast | title, left_bullets, right_bullets, notes |
 
 ### 5. Quality Standards
 
@@ -71,7 +72,7 @@ audience: business, IT
 
 ---
 
-## [bullets] Slide Title
+## [content] Slide Title
 
 - Bullet point one
 - Bullet point two
@@ -81,15 +82,19 @@ audience: business, IT
 
 ---
 
-## [two-column] Slide Title
+## [section-header] Section Title
 
-**Left Title**: Left Column Header
+**Subtitle**: Optional subtitle for the section transition
+
+**Notes**: Speaker notes for delivery guidance.
+
+---
+
+## [two-column] Slide Title
 
 **Left**:
 - Left bullet one
 - Left bullet two
-
-**Right Title**: Right Column Header
 
 **Right**:
 - Right bullet one
@@ -113,9 +118,10 @@ audience: business, IT
 
 Each slide is separated by `---` and begins with `## [type] Title`:
 
-- **Title slides**: Include a `**Subtitle**:` line
-- **Bullet slides**: Use markdown list items (`- `)
-- **Two-column slides**: Include `**Left Title**:`, `**Left**:` (bullets), `**Right Title**:`, `**Right**:` (bullets)
+- **Title slides** (`[title]`): Include a `**Subtitle**:` line
+- **Content slides** (`[content]`): Use markdown list items (`- `)
+- **Section Header slides** (`[section-header]`): Include an optional `**Subtitle**:` line for topic transitions
+- **Two-column slides** (`[two-column]`): Include `**Left**:` (bullets) and `**Right**:` (bullets)
 - **All slides**: Must include a `**Notes**:` section
 
 ## Development Standards

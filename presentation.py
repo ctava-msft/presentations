@@ -81,7 +81,11 @@ def _parse_slide(raw: str) -> dict | None:
         sub_match = re.search(r"\*\*Subtitle\*\*\s*:\s*(.+)", rest)
         slide["subtitle"] = sub_match.group(1).strip() if sub_match else ""
 
-    elif slide_type == "bullets":
+    elif slide_type == "section-header":
+        sub_match = re.search(r"\*\*Subtitle\*\*\s*:\s*(.+)", rest)
+        slide["subtitle"] = sub_match.group(1).strip() if sub_match else ""
+
+    elif slide_type == "content":
         slide["bullets"] = _extract_bullets(rest)
 
     elif slide_type == "two-column":
@@ -99,14 +103,9 @@ def _parse_two_column(text: str) -> dict:
     """Parse two-column slide fields."""
     result: dict = {}
 
-    lt_match = re.search(r"\*\*Left Title\*\*\s*:\s*(.+)", text)
-    rt_match = re.search(r"\*\*Right Title\*\*\s*:\s*(.+)", text)
-    result["left_title"] = lt_match.group(1).strip() if lt_match else ""
-    result["right_title"] = rt_match.group(1).strip() if rt_match else ""
-
-    # Extract left bullets (between **Left**: and **Right Title**: or **Right**:)
+    # Extract left bullets (between **Left**: and **Right**: or **Notes**: or end)
     left_match = re.search(
-        r"\*\*Left\*\*\s*:\s*\n(.*?)(?=\*\*Right Title\*\*|\*\*Right\*\*|\*\*Notes\*\*|$)",
+        r"\*\*Left\*\*\s*:\s*\n(.*?)(?=\*\*Right\*\*|\*\*Notes\*\*|$)",
         text, re.DOTALL,
     )
     result["left_bullets"] = _extract_bullets(left_match.group(1)) if left_match else []
@@ -126,6 +125,7 @@ def _parse_two_column(text: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def add_title_slide(prs: Presentation, title: str, subtitle: str, notes: str):
+    """Layout 0 – Title Slide: large centered title + subtitle."""
     slide = prs.slides.add_slide(prs.slide_layouts[0])
     slide.shapes.title.text = title
     slide.placeholders[1].text = subtitle
@@ -134,7 +134,8 @@ def add_title_slide(prs: Presentation, title: str, subtitle: str, notes: str):
     slide.notes_slide.notes_text_frame.text = notes
 
 
-def add_bullets_slide(prs: Presentation, title: str, bullets: list[str], notes: str):
+def add_content_slide(prs: Presentation, title: str, bullets: list[str], notes: str):
+    """Layout 1 – Title and Content: title bar + single content placeholder."""
     slide = prs.slides.add_slide(prs.slide_layouts[1])
     slide.shapes.title.text = title
     slide.shapes.title.text_frame.paragraphs[0].font.size = HEADING_FONT
@@ -148,55 +149,46 @@ def add_bullets_slide(prs: Presentation, title: str, bullets: list[str], notes: 
     slide.notes_slide.notes_text_frame.text = notes
 
 
+def add_section_header_slide(prs: Presentation, title: str, subtitle: str, notes: str):
+    """Layout 2 – Section Header: large title + subtitle for topic transitions."""
+    slide = prs.slides.add_slide(prs.slide_layouts[2])
+    slide.shapes.title.text = title
+    slide.shapes.title.text_frame.paragraphs[0].font.size = TITLE_FONT
+    if subtitle:
+        slide.placeholders[1].text = subtitle
+        slide.placeholders[1].text_frame.paragraphs[0].font.size = SUBTITLE_FONT
+    slide.notes_slide.notes_text_frame.text = notes
+
+
 def add_two_column_slide(
     prs: Presentation,
     title: str,
-    left_title: str,
     left_bullets: list[str],
-    right_title: str,
     right_bullets: list[str],
     notes: str,
 ):
-    slide = prs.slides.add_slide(prs.slide_layouts[5])  # title-only layout
+    """Layout 3 – Two Content: title + two side-by-side content placeholders."""
+    slide = prs.slides.add_slide(prs.slide_layouts[3])
     slide.shapes.title.text = title
     slide.shapes.title.text_frame.paragraphs[0].font.size = HEADING_FONT
 
-    # Left column
-    left = slide.shapes.add_textbox(Inches(0.8), Inches(1.7), Inches(4.4), Inches(4.8))
-    ltf = left.text_frame
-    ltf.clear()
-    lp = ltf.paragraphs[0]
-    lp.text = left_title
-    lp.font.size = COL_HEADING_FONT
-    lp.font.bold = True
-    for b in left_bullets:
-        p = ltf.add_paragraph()
+    # Left content – placeholder index 1
+    left_ph = slide.placeholders[1].text_frame
+    left_ph.clear()
+    for i, b in enumerate(left_bullets):
+        p = left_ph.paragraphs[0] if i == 0 else left_ph.add_paragraph()
         p.text = b
-        p.level = 1
+        p.level = 0
         p.font.size = COL_BODY_FONT
 
-    # Right column
-    right = slide.shapes.add_textbox(Inches(5.1), Inches(1.7), Inches(4.4), Inches(4.8))
-    rtf = right.text_frame
-    rtf.clear()
-    rp = rtf.paragraphs[0]
-    rp.text = right_title
-    rp.font.size = COL_HEADING_FONT
-    rp.font.bold = True
-    for b in right_bullets:
-        p = rtf.add_paragraph()
+    # Right content – placeholder index 2
+    right_ph = slide.placeholders[2].text_frame
+    right_ph.clear()
+    for i, b in enumerate(right_bullets):
+        p = right_ph.paragraphs[0] if i == 0 else right_ph.add_paragraph()
         p.text = b
-        p.level = 1
+        p.level = 0
         p.font.size = COL_BODY_FONT
-
-    # Subtle divider line
-    line = slide.shapes.add_shape(
-        1,  # MSO_SHAPE.RECTANGLE
-        Inches(4.95), Inches(1.55), Inches(0.03), Inches(5.1),
-    )
-    line.fill.solid()
-    line.fill.fore_color.rgb = RGBColor(230, 230, 230)
-    line.line.fill.background()
 
     slide.notes_slide.notes_text_frame.text = notes
 
@@ -206,17 +198,15 @@ def add_two_column_slide(
 # ---------------------------------------------------------------------------
 
 SLIDE_BUILDERS = {
-    "title": lambda prs, s: add_title_slide(prs, s["title"], s.get("subtitle", ""), s.get("notes", "")),
-    "bullets": lambda prs, s: add_bullets_slide(prs, s["title"], s.get("bullets", []), s.get("notes", "")),
+    "title": lambda prs, s: add_title_slide(
+        prs, s["title"], s.get("subtitle", ""), s.get("notes", "")),
+    "content": lambda prs, s: add_content_slide(
+        prs, s["title"], s.get("bullets", []), s.get("notes", "")),
+    "section-header": lambda prs, s: add_section_header_slide(
+        prs, s["title"], s.get("subtitle", ""), s.get("notes", "")),
     "two-column": lambda prs, s: add_two_column_slide(
-        prs,
-        s["title"],
-        s.get("left_title", ""),
-        s.get("left_bullets", []),
-        s.get("right_title", ""),
-        s.get("right_bullets", []),
-        s.get("notes", ""),
-    ),
+        prs, s["title"], s.get("left_bullets", []), s.get("right_bullets", []),
+        s.get("notes", "")),
 }
 
 
@@ -237,10 +227,21 @@ def render(spec: dict, output_dir: str = "output"):
         builder(prs, slide_data)
 
     os.makedirs(output_dir, exist_ok=True)
-    out_path = os.path.join(output_dir, out_name)
+    out_path = _next_version_path(output_dir, out_name)
     prs.save(out_path)
     print(f"Saved {len(slides)} slides -> {out_path}")
     return out_path
+
+
+def _next_version_path(output_dir: str, filename: str) -> str:
+    """Return a versioned path: filename.pptx, filename_1.pptx, filename_2.pptx, …"""
+    base, ext = os.path.splitext(filename)
+    candidate = os.path.join(output_dir, filename)
+    n = 1
+    while os.path.exists(candidate):
+        candidate = os.path.join(output_dir, f"{base}_{n}{ext}")
+        n += 1
+    return candidate
 
 
 # ---------------------------------------------------------------------------
