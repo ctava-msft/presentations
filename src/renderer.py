@@ -9,7 +9,7 @@ from pptx import Presentation
 from .animations import apply_animations
 from .enrichment import enrich_content_from_urls, enrich_notes_from_urls
 from .images import resolve_image_prompt
-from .slides import SLIDE_BUILDERS
+from .slides import SLIDE_BUILDERS, missing_images
 from .spec_writer import write_spec
 from .style import Style
 
@@ -142,10 +142,16 @@ def render(
     # Write enriched spec back to disk so next run uses cached data
     if any_enriched and spec_path:
         write_spec(spec, spec_path)
-        print(f"Saved enriched spec -> {spec_path}")
+        print(f"\n\033[32m\u2714 Saved enriched spec -> {spec_path}\033[0m")
+
+    # Summarise missing images (if any)
+    if missing_images:
+        print(f"\nWarning: {len(missing_images)} image(s) not found, skipped. "
+              "Run with a valid image model to regenerate them.")
+        missing_images.clear()
 
     os.makedirs(output_dir, exist_ok=True)
     out_path = _next_version_path(output_dir, out_name)
     prs.save(out_path)
-    print(f"Saved {len(slides)} slides -> {out_path}")
+    print(f"\n\033[32m✔ Saved {len(slides)} slides -> {out_path}\033[0m")
     return out_path

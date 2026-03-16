@@ -42,6 +42,10 @@ def _apply_position(shape, pos: dict | None) -> None:
         shape.height = Inches(pos["height"])
 
 
+# Track missing images so they can be summarised at the end
+missing_images: list[str] = []
+
+
 def _add_image(slide, img: dict, pos: dict | None = None) -> None:
     """Add an image to *slide* from a parsed ``**Image**`` dict.
 
@@ -49,7 +53,7 @@ def _add_image(slide, img: dict, pos: dict | None = None) -> None:
     """
     path = img["path"]
     if not os.path.isfile(path):
-        print(f"Warning: image not found: {path}, skipping.")
+        missing_images.append(path)
         return
     left = Inches((pos or {}).get("left", img.get("left", 6.5)))
     top = Inches((pos or {}).get("top", img.get("top", 1.5)))
@@ -342,15 +346,20 @@ def add_resource_box_slide(
 
     box_top = Inches(2.3)
     outer_border_color_hex = ss.get("OuterBorderColor")
-    for box_data in slide_data.get("boxes", []):
+
+    # Compute uniform container height based on the box with the most rows
+    all_boxes = slide_data.get("boxes", [])
+    max_rows = max((max(len(b["rows"]), 1) for b in all_boxes), default=1)
+    uniform_height = Inches(0.5 * max_rows + 0.35)
+
+    for box_data in all_boxes:
         label = box_data["label"]
         rows = box_data["rows"]
 
         # Container rounded rectangle (border + background)
         container_left = Inches(1.6)
         container_width = slide_w - Inches(2.0)
-        num_rows = max(len(rows), 1)
-        container_height = Inches(0.5 * num_rows + 0.35)
+        container_height = uniform_height
 
         # Optional outer border rectangle (drawn first so it sits behind)
         if outer_border_color_hex:
