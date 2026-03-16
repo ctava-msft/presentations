@@ -141,6 +141,32 @@ class TestRender:
     def test_enrichment_called_when_not_cached(self, tmp_path):
         spec = self._make_spec(1)
         spec["slides"][0]["enriched"] = False
+        spec["slides"][0]["content_urls"] = []
+        with patch("src.renderer.enrich_content_from_urls") as mock_ec, \
+             patch("src.renderer.enrich_notes_from_urls") as mock_en:
+            render(spec, str(tmp_path))
+        mock_ec.assert_called_once()
+        mock_en.assert_called_once()
+
+    def test_enrichment_forced_with_refetch(self, tmp_path):
+        spec = self._make_spec(1)
+        spec["slides"][0]["enriched"] = True
+        spec["slides"][0]["content_urls"] = []
+        with patch("src.renderer.enrich_content_from_urls") as mock_ec, \
+             patch("src.renderer.enrich_notes_from_urls") as mock_en:
+            render(spec, str(tmp_path), refetch=True)
+        mock_ec.assert_called_once()
+        mock_en.assert_called_once()
+
+    def test_unknown_slide_type_skipped(self, tmp_path):
+        spec = self._make_spec(1)
+        spec["slides"][0]["type"] = "nonexistent-layout"
+        path = render(spec, str(tmp_path))
+        assert os.path.isfile(path)
+
+    def test_enrichment_called_when_not_cached(self, tmp_path):
+        spec = self._make_spec(1)
+        spec["slides"][0]["enriched"] = False
         with patch("src.renderer.enrich_content_from_urls") as mock_ec, \
              patch("src.renderer.enrich_notes_from_urls") as mock_en:
             render(spec, str(tmp_path))

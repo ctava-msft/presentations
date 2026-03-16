@@ -143,6 +143,61 @@ def test_build_click_par_contains_shape_id():
     assert 'spid="42"' in xml
 
 
+# ---------------------------------------------------------------------------
+# apply_animations – integration
+# ---------------------------------------------------------------------------
+
+
+def test_apply_animations_with_valid_effect():
+    _, slide = _make_slide(1)
+    animations = [{"target": "title", "effect": "fade"}]
+    apply_animations(slide, animations)
+    # Verify timing XML was injected
+    timing = slide._element.find(qn("p:timing"))
+    assert timing is not None
+
+
+def test_apply_animations_unknown_effect():
+    _, slide = _make_slide(1)
+    animations = [{"target": "title", "effect": "nonexistent_effect"}]
+    apply_animations(slide, animations)
+    # Unknown effect should be skipped
+    timing = slide._element.find(qn("p:timing"))
+    assert timing is None
+
+
+def test_apply_animations_empty_list():
+    _, slide = _make_slide(1)
+    apply_animations(slide, [])
+    timing = slide._element.find(qn("p:timing"))
+    assert timing is None
+
+
+def test_apply_animations_no_matching_shapes():
+    _, slide = _make_slide(1)
+    animations = [{"target": "nonexistent_widget_xyz", "effect": "fade"}]
+    apply_animations(slide, animations)
+    timing = slide._element.find(qn("p:timing"))
+    assert timing is None
+
+
+def test_apply_animations_multiple_effects():
+    _, slide = _make_slide(1)
+    animations = [
+        {"target": "title", "effect": "fade"},
+        {"target": "content", "effect": "appear"},
+    ]
+    apply_animations(slide, animations)
+    timing = slide._element.find(qn("p:timing"))
+    assert timing is not None
+
+
+def test_build_visual_effect_xml_unknown():
+    """Unknown visual returns empty string."""
+    xml = _build_visual_effect_xml("5", "unknown_effect_xyz")
+    assert xml == ""
+
+
 def test_build_click_par_contains_preset_id():
     effect = EFFECT_MAP["wipe"]
     xml = _build_click_par("3", effect)

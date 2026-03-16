@@ -12,6 +12,7 @@ from src.enrichment import (
     _extract_ai_bullets,
     _fetch_url_text,
     _get_openai_endpoint,
+    _enrich_two_column_bullets,
     enrich_content_from_urls,
     enrich_notes_from_urls,
 )
@@ -175,3 +176,126 @@ class TestEnrichContentFromUrls:
         with patch.dict(os.environ, env, clear=False):
             enrich_content_from_urls(slide)
         assert slide["bullets"] == ["A"]
+
+
+# ---------------------------------------------------------------------------
+# _fetch_url_text
+# ---------------------------------------------------------------------------
+
+
+class TestFetchUrlText:
+    def test_returns_plain_text(self):
+        html = b"<html><body><p>Hello World</p></body></html>"
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = html
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch("src.enrichment.urllib.request.urlopen", return_value=mock_resp):
+            result = _fetch_url_text("https://example.com")
+        assert "Hello World" in result
+
+    def test_truncates_to_max_chars(self):
+        html = b"<html><body><p>" + b"A" * 10000 + b"</p></body></html>"
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = html
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch("src.enrichment.urllib.request.urlopen", return_value=mock_resp):
+            result = _fetch_url_text("https://example.com", max_chars=100)
+        assert len(result) <= 100
+
+    def test_returns_empty_on_error(self):
+        with patch("src.enrichment.urllib.request.urlopen", side_effect=Exception("timeout")):
+            result = _fetch_url_text("https://bad-url.example.com")
+        assert result == ""
+
+    def test_strips_script_content(self):
+        html = b"<html><script>var x=1;</script><body><p>Visible</p></body></html>"
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = html
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch("src.enrichment.urllib.request.urlopen", return_value=mock_resp):
+            result = _fetch_url_text("https://example.com")
+        assert "Visible" in result
+        assert "var x" not in result
+
+
+# ---------------------------------------------------------------------------
+# _enrich_two_column_bullets
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichTwoColumnBullets:
+    def test_adds_left_and_right_bullets(self):
+        slide = {
+            "left_bullets": ["Existing left"],
+            "right_bullets": ["Existing right"],
+        }
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = (
+            "LEFT: - New left bullet\nRIGHT: - New right bullet"
+        )
+        mock_client.chat.completions.create.return_value = mock_response
+
+        _enrich_two_column_bullets(mock_client, "gpt-4o", slide, "Title", "context")
+
+        assert len(slide["left_bullets"]) == 2
+        assert slide["left_bullets"][-1] == "New left bullet"
+        assert len(slide["right_bullets"]) == 2
+        assert slide["right_bullets"][-1] == "New right bullet"
+
+    def test_handles_empty_response(self):
+        slide = {
+            "left_bullets": ["L"],
+            "right_bullets": ["R"],
+        }
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = ""
+        mock_client.chat.completions.create.return_value = mock_response
+
+        _enrich_two_column_bullets(mock_client, "gpt-4o", slide, "Title", "context")
+
+        assert slide["left_bullets"] == ["L"]
+        assert slide["right_bullets"] == ["R"]
+
+    def test_left_only_response(self):
+        slide = {
+            "left_bullets": ["L"],
+            "right_bullets": ["R"],
+        }
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "LEFT: - Only left"
+        mock_client.chat.completions.create.return_value = mock_response
+
+        _enrich_two_column_bullets(mock_client, "gpt-4o", slide, "Title", "context")
+
+        assert len(slide["left_bullets"]) == 2
+        assert len(slide["right_bullets"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# enrich_content_from_urls – two-column path
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichContentTwoColumn:
+    def test_two_column_type_accepted(self):
+        slide = {
+            "type": "two-column",
+            "content_urls": ["https://example.com"],
+            "left_bullets": ["L"],
+            "right_bullets": ["R"],
+            "title": "T",
+        }
+        env = {"AI_PROJECT_NAME": "", "AZURE_AI_PROJECT_ENDPOINT": ""}
+        with patch.dict(os.environ, env, clear=False):
+            enrich_content_from_urls(slide)
+        # No endpoint → skips, but doesn't crash for two-column type
+        assert slide["left_bullets"] == ["L"]

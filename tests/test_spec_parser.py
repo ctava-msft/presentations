@@ -20,6 +20,8 @@ from src.spec_parser import (
     _parse_two_column,
     _parse_resource_boxes,
     _parse_slide_style,
+    _strip_directives,
+    _dedupe_bullets,
 )
 
 
@@ -262,6 +264,98 @@ class TestParsePositions:
 
     def test_missing_position(self):
         assert _parse_position_field("nothing", "Title") is None
+
+
+# ---------------------------------------------------------------------------
+# _strip_directives
+# ---------------------------------------------------------------------------
+
+
+class TestStripDirectives:
+    def test_removes_image_directive(self):
+        text = "- Bullet one\n**Image**: img.png, 1.0, 2.0\n- Bullet two"
+        result = _strip_directives(text)
+        assert "Bullet one" in result
+        assert "Bullet two" in result
+        assert "**Image**" not in result
+
+    def test_removes_animation_directive(self):
+        text = "- A\n**Animation**: title > fade\n- B"
+        result = _strip_directives(text)
+        assert "**Animation**" not in result
+        assert "A" in result
+        assert "B" in result
+
+    def test_removes_content_urls_section(self):
+        text = "- Bullet\n**ContentUrls**:\n- https://example.com\n- https://other.com"
+        result = _strip_directives(text)
+        assert "**ContentUrls**" not in result
+        assert "Bullet" in result
+
+    def test_removes_supplemental_section(self):
+        text = "- Bullet\n\n--- Supplemental (from ContentUrls) ---\n\n- Extra info"
+        result = _strip_directives(text)
+        assert "Bullet" in result
+        assert "Supplemental" not in result
+
+    def test_removes_enriched_directive(self):
+        text = "- A\n**Enriched**: true\n- B"
+        result = _strip_directives(text)
+        assert "**Enriched**" not in result
+
+    def test_removes_bare_url_bullets(self):
+        text = "- Real bullet\n- https://example.com\n- Another bullet"
+        result = _strip_directives(text)
+        assert "Real bullet" in result
+        assert "Another bullet" in result
+
+    def test_preserves_plain_bullets(self):
+        text = "- One\n- Two\n- Three"
+        result = _strip_directives(text)
+        bullets = _extract_bullets(result)
+        assert bullets == ["One", "Two", "Three"]
+
+
+# ---------------------------------------------------------------------------
+# _dedupe_bullets
+# ---------------------------------------------------------------------------
+
+
+class TestDedupeBullets:
+    def test_removes_duplicates(self):
+        assert _dedupe_bullets(["A", "B", "A", "C"]) == ["A", "B", "C"]
+
+    def test_preserves_order(self):
+        assert _dedupe_bullets(["C", "A", "B"]) == ["C", "A", "B"]
+
+    def test_empty_list(self):
+        assert _dedupe_bullets([]) == []
+
+    def test_single_item(self):
+        assert _dedupe_bullets(["A"]) == ["A"]
+
+    def test_all_duplicates(self):
+        assert _dedupe_bullets(["X", "X", "X"]) == ["X"]
+
+
+# ---------------------------------------------------------------------------
+# _parse_content_urls
+# ---------------------------------------------------------------------------
+
+
+class TestParseContentUrls:
+    def test_parses_urls(self):
+        text = "**ContentUrls**:\n- https://a.com\n- https://b.com"
+        urls = _parse_content_urls(text)
+        assert urls == ["https://a.com", "https://b.com"]
+
+    def test_no_urls(self):
+        assert _parse_content_urls("no urls here") == []
+
+    def test_empty_content_urls(self):
+        text = "**ContentUrls**:\n"
+        urls = _parse_content_urls(text)
+        assert urls == []
 
     def test_parse_positions_multiple(self):
         text = "**TitlePos**: 0.5, 1.0, 5.0, 1.5\n**ImagePos**: 6.0, 0.5"

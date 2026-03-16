@@ -9,6 +9,7 @@ import pytest
 
 from src.images import (
     _get_image_cache_dir,
+    _generate_image_azure,
     _prompt_cache_key,
     generate_image,
     resolve_image_prompt,
@@ -145,3 +146,62 @@ class TestResolveImagePrompt:
         with patch("src.images.generate_image", return_value="/gen.png") as mock_gen:
             resolve_image_prompt(slide, str(tmp_path), default_model="default-model")
         assert mock_gen.call_args[1]["model"] == "custom-model"
+
+
+# ---------------------------------------------------------------------------
+# _generate_image_azure
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateImageAzure:
+    def test_success_saves_file(self, tmp_path):
+        cached_path = str(tmp_path / "test.png")
+        import base64
+        fake_b64 = base64.b64encode(b"fake image data").decode()
+        response_json = {"data": [{"b64_json": fake_b64}]}
+        import json
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(response_json).encode()
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("src.images._get_azure_token", return_value="fake_token"), \
+             patch("urllib.request.urlopen", return_value=mock_resp):
+            result = _generate_image_azure(
+                prompt="a cat",
+                cached_path=cached_path,
+                model="dall-e-3",
+                size="1024x1024",
+                endpoint="https://acct.openai.azure.com",
+                deployment="dall-e-3",
+            )
+        assert result == cached_path
+        assert os.path.isfile(cached_path)
+
+    def test_failure_returns_none(self, tmp_path):
+        cached_path = str(tmp_path / "test.png")
+        with patch("src.images._get_azure_token", side_effect=Exception("auth failed")):
+            result = _generate_image_azure(
+                prompt="a cat",
+                cached_path=cached_path,
+                model="dall-e-3",
+                size="1024x1024",
+                endpoint="https://acct.openai.azure.com",
+                deployment="dall-e-3",
+            )
+        assert result is None
+
+    def test_network_error_returns_none(self, tmp_path):
+        cached_path = str(tmp_path / "test.png")
+        with patch("src.images._get_azure_token", return_value="fake_token"), \
+             patch("urllib.request.urlopen", side_effect=Exception("network error")):
+            result = _generate_image_azure(
+                prompt="a cat",
+                cached_path=cached_path,
+                model="dall-e-3",
+                size="1024x1024",
+                endpoint="https://acct.openai.azure.com",
+                deployment="dall-e-3",
+            )
+        assert result is None
