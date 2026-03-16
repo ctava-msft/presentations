@@ -90,6 +90,22 @@ def _serialize_slide(slide: dict) -> list[str]:
                 lines.append(f"- {b}")
             lines.append("")
 
+    # Resource-box content
+    elif stype == "resource-box":
+        ss = slide.get("slide_style", {})
+        for key, val in ss.items():
+            lines.append(f"**{key}**: {val}")
+        if ss:
+            lines.append("")
+        for box in slide.get("boxes", []):
+            lines.append(f"**Box**: {box['label']}")
+            for row in box.get("rows", []):
+                if row.get("url"):
+                    lines.append(f"- {row['name']} | {row['url']}")
+                else:
+                    lines.append(f"- {row['name']}")
+            lines.append("")
+
     # Image
     img = slide.get("image")
     if img:

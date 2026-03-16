@@ -23,6 +23,11 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
+def _is_url(text: str) -> bool:
+    """Return True if *text* is a bare URL."""
+    return text.strip().startswith(("http://", "https://")) and " " not in text.strip()
+
+
 def _apply_position(shape, pos: dict | None) -> None:
     """Move/resize *shape* according to a parsed position dict (inches)."""
     if not pos:
@@ -60,6 +65,17 @@ def _add_image(slide, img: dict, pos: dict | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _set_text_with_breaks(shape, text: str, font_size) -> None:
+    """Set *text* on *shape*, splitting on ``<br>`` into separate paragraphs."""
+    parts = [p.strip() for p in text.split("<br>")]
+    tf = shape.text_frame
+    tf.clear()
+    for i, part in enumerate(parts):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.text = part
+        p.font.size = font_size
+
+
 def add_title_slide(
     prs: Presentation,
     slide_data: dict,
@@ -71,16 +87,41 @@ def add_title_slide(
     slide = prs.slides.add_slide(prs.slide_layouts[0])
     positions = slide_data.get("positions", {})
     slide.shapes.title.text = slide_data["title"]
-    slide.placeholders[1].text = slide_data.get("subtitle", "")
     slide.shapes.title.text_frame.paragraphs[0].font.size = style.title_font
-    slide.placeholders[1].text_frame.paragraphs[0].font.size = style.subtitle_font
+    subtitle = slide_data.get("subtitle", "")
+    if "<br>" in subtitle:
+        _set_text_with_breaks(slide.placeholders[1], subtitle, style.subtitle_font)
+    else:
+        slide.placeholders[1].text = subtitle
+        slide.placeholders[1].text_frame.paragraphs[0].font.size = style.subtitle_font
     _apply_position(slide.shapes.title, positions.get("title"))
     _apply_position(slide.placeholders[1], positions.get("subtitle"))
+    # Auto-align title top with image top when no explicit positions
+    img = slide_data.get("image")
+    if img and "title" not in positions and "image" not in positions:
+        img_top = Inches(img.get("top", 1.3))
+        slide.shapes.title.top = img_top
     slide.notes_slide.notes_text_frame.text = slide_data.get("notes", "")
     if slide_data.get("image"):
         _add_image(slide, slide_data["image"], positions.get("image"))
     if apply_animations and slide_data.get("animations"):
         apply_animations(slide, slide_data["animations"])
+
+
+# Default positions (inches) for slide types without explicit Pos directives
+_CONTENT_DEFAULTS = {
+    "title": {"left": 0.5, "top": 0.2, "width": 8.5, "height": 0.8},
+    "content": {"left": 0.5, "top": 1.2, "width": 6.5, "height": 5.5},
+}
+_TWO_COL_DEFAULTS = {
+    "title": {"left": 0.5, "top": 0.2, "width": 8.5, "height": 0.8},
+    "left": {"left": 0.5, "top": 1.2, "width": 4.25, "height": 4.0},
+    "right": {"left": 5.0, "top": 1.2, "width": 4.25, "height": 4.0},
+}
+_SECTION_DEFAULTS = {
+    "title": {"left": 0.5, "top": 2.0, "width": 9.0, "height": 1.5},
+    "subtitle": {"left": 0.5, "top": 3.6, "width": 9.0, "height": 1.0},
+}
 
 
 def add_content_slide(
@@ -95,9 +136,15 @@ def add_content_slide(
     positions = slide_data.get("positions", {})
     slide.shapes.title.text = slide_data["title"]
     slide.shapes.title.text_frame.paragraphs[0].font.size = style.heading_font
-    _apply_position(slide.shapes.title, positions.get("title"))
+    _apply_position(slide.shapes.title, positions.get("title") or _CONTENT_DEFAULTS["title"])
     body_ph = slide.shapes.placeholders[1]
-    _apply_position(body_ph, positions.get("content"))
+    content_pos = positions.get("content") or _CONTENT_DEFAULTS["content"].copy()
+    # Constrain content width when image is present to prevent overlap
+    img = slide_data.get("image")
+    if img and "content" not in positions:
+        img_left = img.get("left", 6.5)
+        content_pos["width"] = img_left - 0.2 - content_pos["left"]
+    _apply_position(body_ph, content_pos)
     body = body_ph.text_frame
     body.clear()
     for i, b in enumerate(slide_data.get("bullets", [])):
@@ -124,12 +171,12 @@ def add_section_header_slide(
     positions = slide_data.get("positions", {})
     slide.shapes.title.text = slide_data["title"]
     slide.shapes.title.text_frame.paragraphs[0].font.size = style.title_font
-    _apply_position(slide.shapes.title, positions.get("title"))
+    _apply_position(slide.shapes.title, positions.get("title") or _SECTION_DEFAULTS["title"])
     subtitle = slide_data.get("subtitle", "")
     if subtitle:
         slide.placeholders[1].text = subtitle
         slide.placeholders[1].text_frame.paragraphs[0].font.size = style.subtitle_font
-        _apply_position(slide.placeholders[1], positions.get("subtitle"))
+        _apply_position(slide.placeholders[1], positions.get("subtitle") or _SECTION_DEFAULTS["subtitle"])
     slide.notes_slide.notes_text_frame.text = slide_data.get("notes", "")
     if slide_data.get("image"):
         _add_image(slide, slide_data["image"], positions.get("image"))
@@ -149,10 +196,10 @@ def add_two_column_slide(
     positions = slide_data.get("positions", {})
     slide.shapes.title.text = slide_data["title"]
     slide.shapes.title.text_frame.paragraphs[0].font.size = style.heading_font
-    _apply_position(slide.shapes.title, positions.get("title"))
+    _apply_position(slide.shapes.title, positions.get("title") or _TWO_COL_DEFAULTS["title"])
 
     left_placeholder = slide.placeholders[1]
-    _apply_position(left_placeholder, positions.get("left"))
+    _apply_position(left_placeholder, positions.get("left") or _TWO_COL_DEFAULTS["left"])
     left_ph = left_placeholder.text_frame
     left_ph.clear()
     for i, b in enumerate(slide_data.get("left_bullets", [])):
@@ -162,7 +209,7 @@ def add_two_column_slide(
         p.font.size = style.col_body_font
 
     right_placeholder = slide.placeholders[2]
-    _apply_position(right_placeholder, positions.get("right"))
+    _apply_position(right_placeholder, positions.get("right") or _TWO_COL_DEFAULTS["right"])
     right_ph = right_placeholder.text_frame
     right_ph.clear()
     for i, b in enumerate(slide_data.get("right_bullets", [])):

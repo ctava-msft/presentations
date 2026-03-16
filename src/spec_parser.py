@@ -70,7 +70,7 @@ def _parse_slide(raw: str) -> dict | None:
         slide["subtitle"] = sub_match.group(1).strip() if sub_match else ""
 
     elif slide_type == "content":
-        slide["bullets"] = _extract_bullets(rest)
+        slide["bullets"] = _dedupe_bullets(_extract_bullets(_strip_directives(rest)))
 
     elif slide_type == "two-column":
         slide.update(_parse_two_column(rest))
@@ -86,6 +86,31 @@ def _parse_slide(raw: str) -> dict | None:
 
 def _extract_bullets(text: str) -> list[str]:
     return [m.group(1).strip() for m in re.finditer(r"^[-*]\s+(.+)", text, re.MULTILINE)]
+
+
+def _strip_directives(text: str) -> str:
+    """Remove directive blocks and metadata lines, leaving only bullet content."""
+    text = re.sub(r"\*\*ContentUrls\*\*\s*:\s*\n(?:\s*-\s+\S+\n?)*", "", text)
+    text = re.sub(r"---\s+Supplemental\s+\(.*?\)\s+---.*?(?=\n---|$)", "", text, flags=re.DOTALL)
+    text = re.sub(
+        r"\*\*(?:Image|ImagePrompt|ImageModel|Animation|Enriched|Subtitle)\*\*\s*:\s*.+",
+        "", text,
+    )
+    text = re.sub(r"\*\*\w+Pos\*\*\s*:\s*.+", "", text)
+    # Remove bare URL bullet lines (leaked from enrichment)
+    text = re.sub(r"^[-*]\s+https?://\S+\s*$", "", text, flags=re.MULTILINE)
+    return text
+
+
+def _dedupe_bullets(bullets: list[str]) -> list[str]:
+    """Remove duplicate bullets, preserving order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for b in bullets:
+        if b not in seen:
+            seen.add(b)
+            result.append(b)
+    return result
 
 
 def _parse_two_column(text: str) -> dict:
