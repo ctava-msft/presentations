@@ -16,6 +16,14 @@ Key pain points this project addresses:
 
 This tool solves these problems by treating presentations as **code**: a simple Markdown spec file drives the entire build, AI generates visuals and enriches notes from reference URLs, and every run produces a versioned `.pptx` — reproducible, diffable, and fully automated.
 
+## Prerequisites
+
+- **Python 3.10+** — [Download](https://www.python.org/downloads/)
+- **pip** — included with Python; used to install dependencies
+- **Azure Developer CLI (`azd`)** — required for provisioning Azure infrastructure ([Install](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd))
+- **Azure CLI (`az`)** — run `az login` so `DefaultAzureCredential` can authenticate ([Install](https://learn.microsoft.com/cli/azure/install-azure-cli))
+- **Azure AI Foundry resources** — run `azd up` from the `infra/` directory to provision the AI project endpoint, model deployments, and Bing Grounding connection (see [Azure Infrastructure](#azure-infrastructure))
+
 ## Quick Start
 
 ```bash
