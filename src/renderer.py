@@ -132,7 +132,10 @@ def render(
                 any_enriched = True
 
         # Resolve any ImagePrompt → generate images before building
+        had_image = bool(slide_data.get("image"))
         resolve_image_prompt(slide_data, output_dir, default_model=default_model)
+        if not had_image and slide_data.get("image"):
+            any_enriched = True
 
         builder(prs, slide_data, style, apply_animations=apply_animations)
 

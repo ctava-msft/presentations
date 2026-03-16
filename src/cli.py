@@ -11,16 +11,25 @@ from .renderer import render
 
 
 def _load_env() -> None:
-    """Load a ``.env`` file from the project root if present."""
+    """Load a ``.env`` file from the project root if present.
+
+    Searches (in order):
+    1. ``<cwd>/.env``
+    2. ``<cwd>/.azure/presentations/.env``  (azd environment)
+    """
     try:
         from dotenv import load_dotenv
     except ImportError:
         return
-    # Walk upward from the working directory looking for .env
-    env_path = os.path.join(os.getcwd(), ".env")
-    if os.path.isfile(env_path):
-        load_dotenv(env_path, override=False)
-        print(f"Loaded environment from {env_path}")
+    cwd = os.getcwd()
+    candidates = [
+        os.path.join(cwd, ".env"),
+        os.path.join(cwd, ".azure", "presentations", ".env"),
+    ]
+    for env_path in candidates:
+        if os.path.isfile(env_path):
+            load_dotenv(env_path, override=False)
+            print(f"Loaded environment from {env_path}")
 
 
 def main(argv: list[str] | None = None) -> None:

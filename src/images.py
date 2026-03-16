@@ -70,18 +70,18 @@ def _generate_image_azure(
         "quality": "medium",
     }).encode("utf-8")
 
-    token = _get_azure_token()
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-        },
-        method="POST",
-    )
-
     try:
+        token = _get_azure_token()
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            },
+            method="POST",
+        )
+
         print(f"  [{model}] Generating image: {prompt[:80]}...")
         with urllib.request.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read().decode("utf-8"))
@@ -168,7 +168,11 @@ def resolve_image_prompt(
     if not model:
         return
 
-    path = generate_image(ip["prompt"], output_dir, model=model)
+    try:
+        path = generate_image(ip["prompt"], output_dir, model=model)
+    except Exception as exc:
+        print(f"Warning: image generation failed for slide — {exc}")
+        return
     if path:
         img: dict[str, Any] = {"path": path}
         for k in ("left", "top", "width", "height"):
